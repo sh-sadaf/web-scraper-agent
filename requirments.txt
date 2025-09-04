@@ -1,9 +1,0 @@
-beautifulsoup4
-requests
-markdownify
-python-dotenv
-google-generativeai
-streamlit
-playwright
-fastapi
-uvicorn[standard]
