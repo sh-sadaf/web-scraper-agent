@@ -44,3 +44,6 @@ def query_agent(request: QueryRequest):
         "question": request.question,
         "answer": answer
     }
+
+    
+
