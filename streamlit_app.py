@@ -1,46 +1,52 @@
+# streamlit_app.py
 import streamlit as st
-from scraper import scrape_page
-from agent import ask_agent
+import asyncio
+from playwright.async_api import async_playwright
+from agent import ask_agent  # your existing Gemini agent function
 
-st.set_page_config(page_title="Web Scraper + AI Chat", layout="wide")
-st.title("🌐 Web Scraper + AI Chat")
+st.title("Web Scraper + AI Chat")
 
-st.markdown("""
-Enter a URL of the webpage you want to scrape and ask any question about it. 
-The AI agent will try to answer based on the scraped content.
-""")
+# Initialize session state
+if "page_data" not in st.session_state:
+    st.session_state.page_data = None
 
-# Input fields
-url = st.text_input("🌐 Webpage URL")
-question = st.text_input("❓ Your Question")
+# Input URL
+url = st.text_input("Webpage URL:")
 
-if st.button("Ask AI"):
-    if not url or not question:
-        st.warning("Please provide both URL and a question.")
-    else:
-        try:
-            # Scrape the page
-            page_data = scrape_page(url)
-            st.subheader("📄 Page Summary")
-            st.write(f"Headings found: {page_data['headings'][:10]} ...")
-            st.write(f"Total links found: {len(page_data['links'])}")
+# Input Question
+question = st.text_input("Your Question:")
 
-            # Prepare prompt for AI
-            context_prompt = f"""
-            You are an AI web analysis agent.
-            You have scraped the webpage: {url}.
+async def scrape_page(url: str):
+    """Scrape the page asynchronously using Playwright"""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        await page.goto(url, wait_until="domcontentloaded")
+        
+        # Get headings and links
+        headings = await page.eval_on_selector_all("h1, h2, h3, h4, h5, h6", "elements => elements.map(e => e.innerText)")
+        links = await page.eval_on_selector_all("a", "elements => elements.map(e => e.href)")
+        await browser.close()
+        
+        return {"url": url, "headings": headings, "links": links}
 
-            Page Content Summary:
-            - Headings: {page_data['headings']}
-            - Example Links: {page_data['links'][:15]} (and more exist on the page)
+async def main(url, question):
+    if url:
+        st.session_state.page_data = await scrape_page(url)
+        st.success("Page scraped successfully!")
+        st.write("Headings found:", st.session_state.page_data["headings"])
+        st.write("Total links found:", len(st.session_state.page_data["links"]))
 
-            User's Question: {question}
-            """
+    if question and st.session_state.page_data:
+        # Combine page info with user question
+        page_text = "\n".join(st.session_state.page_data["headings"])
+        prompt = f"Here is the scraped page content:\n{page_text}\n\nUser Question: {question}"
+        answer = ask_agent(prompt)
+        st.subheader("AI Answer")
+        st.write(answer)
+    elif question:
+        st.warning("Please provide a URL to scrape first.")
 
-            # Get AI answer
-            answer = ask_agent(context_prompt)
-            st.subheader("🤖 AI Answer")
-            st.write(answer)
-
-        except Exception as e:
-            st.error(f"Error scraping page or contacting AI: {e}")
+# Run asyncio inside Streamlit
+if url or question:
+    asyncio.run(main(url, question))

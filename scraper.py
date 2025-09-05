@@ -24,3 +24,21 @@ def scrape_page(url):
             "headings": headings,
             "links": links
         }
+
+# scraper.py (add this function)
+import requests
+from bs4 import BeautifulSoup
+
+def scrape_page_requests(url):
+    response = requests.get(url, timeout=10)
+    response.raise_for_status()
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    headings = [h.get_text(strip=True) for h in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"])]
+    links = [a.get("href") for a in soup.find_all("a") if a.get("href")]
+
+    return {
+        "headings": headings,
+        "links_count": len(links),
+        "url": url
+    }
