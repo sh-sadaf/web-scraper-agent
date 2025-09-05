@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Web Scraper AI Chat</title>
+<style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    input, textarea { width: 100%; padding: 10px; margin: 5px 0; }
+    button { padding: 10px 20px; }
+    .chat-box { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto; margin-top: 10px; }
+    .user { color: blue; }
+    .ai { color: green; }
+</style>
+</head>
+<body>
+
+<h2>Web Scraper + AI Chat</h2>
+
+<label>Webpage URL:</label>
+<input type="text" id="url" placeholder="Enter URL to scrape">
+
+<label>Your Question:</label>
+<input type="text" id="question" placeholder="Ask about the page">
+
+<button onclick="sendQuery()">Send</button>
+
+<div class="chat-box" id="chat-box"></div>
+
+<script>
+async function sendQuery() {
+    const url = document.getElementById('url').value;
+    const question = document.getElementById('question').value;
+
+    if(!url || !question) {
+        alert("Please enter both URL and question!");
+        return;
+    }
+
+    const chatBox = document.getElementById('chat-box');
+
+    // Show user's message
+    chatBox.innerHTML += `<p class="user"><b>You:</b> ${question}</p>`;
+
+    try {
+        const response = await fetch("https://web-scraper-agent.onrender.com/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url, question })
+        });
+
+        const data = await response.json();
+
+        // Show AI's response
+        chatBox.innerHTML += `<p class="ai"><b>AI:</b> ${data.answer}</p>`;
+        chatBox.scrollTop = chatBox.scrollHeight; // scroll to bottom
+    } catch (err) {
+        chatBox.innerHTML += `<p class="ai"><b>AI:</b> Error: ${err}</p>`;
+    }
+
+    document.getElementById('question').value = "";
+}
+</script>
+
+</body>
+</html>

@@ -4,17 +4,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Set the API key globally
+# Configure API key
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 def ask_agent(prompt: str) -> str:
     try:
-        response = genai.responses.create(
-            model="gemini-1.5",
-            input=prompt
-        )
-        # The text content is inside response.output_text
-        return response.output_text
+        response = genai.GenerativeModel("gemini-1.5-flash").generate_content(prompt)
+        return response.text
     except Exception as e:
         return f"Error contacting Gemini API: {e}"
+
+
 
