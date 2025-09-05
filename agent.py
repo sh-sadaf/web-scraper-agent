@@ -1,19 +1,20 @@
-import google.generativeai as genai
 import os
+import google.generativeai as genai
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
-# Initialize Gemini client
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+# Set the API key globally
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 def ask_agent(prompt: str) -> str:
     try:
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",  # fast, cheap model
-            contents=prompt
+        response = genai.responses.create(
+            model="gemini-1.5",
+            input=prompt
         )
-        return response.text
+        # The text content is inside response.output_text
+        return response.output_text
     except Exception as e:
         return f"Error contacting Gemini API: {e}"
+
