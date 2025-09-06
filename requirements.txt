@@ -7,6 +7,5 @@ streamlit
 playwright
 fastapi
 uvicorn[standard]
-asyncio
 
 

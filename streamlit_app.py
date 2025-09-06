@@ -12,13 +12,21 @@ st.title("Web Scraper + AI Chat")
 def install_playwright_browsers():
     """Install Playwright browsers if not already installed"""
     try:
-        # Try to run playwright install
-        result = subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], 
-                              capture_output=True, text=True, check=True)
+        # For Streamlit Cloud, use the system playwright
+        result = subprocess.run([
+            "playwright", "install", "chromium", "--with-deps"
+        ], capture_output=True, text=True, check=True)
         return True
-    except subprocess.CalledProcessError as e:
-        st.error(f"Failed to install Playwright browsers: {e}")
-        return False
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        try:
+            # Fallback to python module
+            result = subprocess.run([
+                sys.executable, "-m", "playwright", "install", "chromium", "--with-deps"
+            ], capture_output=True, text=True, check=True)
+            return True
+        except subprocess.CalledProcessError as e:
+            st.error(f"Failed to install Playwright browsers: {e}")
+            return False
 
 def check_playwright_browsers():
     """Check if Playwright browsers are installed"""
@@ -29,7 +37,8 @@ def check_playwright_browsers():
             browser = p.chromium.launch(headless=True)
             browser.close()
         return True
-    except Exception:
+    except Exception as e:
+        st.warning(f"Playwright browser check failed: {str(e)}")
         return False
 
 # Initialize session state
@@ -38,13 +47,13 @@ if "page_data" not in st.session_state:
 
 # Check and install Playwright browsers if needed
 if not check_playwright_browsers():
-    st.info("Installing Playwright browsers... This may take a few minutes on first run.")
-    if install_playwright_browsers():
-        st.success("Playwright browsers installed successfully!")
-        st.rerun()
-    else:
-        st.error("Failed to install Playwright browsers. Please run 'playwright install' manually.")
-        st.stop()
+    with st.spinner("Installing Playwright browsers... This may take a few minutes on first run."):
+        if install_playwright_browsers():
+            st.success("Playwright browsers installed successfully!")
+            st.rerun()
+        else:
+            st.error("Failed to install Playwright browsers. The app may not work properly.")
+            st.info("If this persists, try redeploying your app on Streamlit Cloud.")
 
 # Input URL
 url = st.text_input("Webpage URL:")
