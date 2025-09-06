@@ -35,22 +35,98 @@ def check_playwright_browsers():
     except ImportError:
         return False
 
-# Initialize session state
-if "page_data" not in st.session_state:
-    st.session_state.page_data = None
-if "page_summary" not in st.session_state:
-    st.session_state.page_summary = None
+def scrape_page_selenium(url: str):
+    """Selenium-based scraping for dynamic content"""
+    if not SELENIUM_AVAILABLE:
+        return None
+    
+    try:
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--window-size=1920,1080")
+        
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        
+        driver.get(url)
+        
+        # Wait for content to load
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
+        
+        # Get headings
+        heading_elements = driver.find_elements(By.CSS_SELECTOR, "h1, h2, h3, h4, h5, h6")
+        headings = [h.text.strip() for h in heading_elements if h.text.strip()]
+        
+        # Get links
+        link_elements = driver.find_elements(By.TAG_NAME, "a")
+        links = [link.get_attribute("href") for link in link_elements if link.get_attribute("href")]
+        
+        driver.quit()
+        
+        return {"url": url, "headings": headings, "links": links}
+    except Exception as e:
+        st.warning(f"Selenium scraping failed: {str(e)}")
+        return None
 
-# Simple check - don't try to launch browser during startup
-playwright_available = check_playwright_browsers()
+def scrape_page_requests(url: str):
+    """Enhanced requests-based scraping with better headers and content extraction"""
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+        }
+        
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Remove script and style elements
+        for script in soup(["script", "style"]):
+            script.decompose()
+        
+        # Get headings
+        headings = [h.get_text().strip() for h in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])]
+        headings = [h for h in headings if h]  # Remove empty headings
+        
+        # Get links
+        links = [a.get('href') for a in soup.find_all('a', href=True)]
+        
+        # Get paragraph text for more content
+        paragraphs = [p.get_text().strip() for p in soup.find_all('p')]
+        paragraphs = [p for p in paragraphs if len(p) > 20]  # Only meaningful paragraphs
+        
+        return {
+            "url": url, 
+            "headings": headings, 
+            "links": links,
+            "paragraphs": paragraphs[:10]  # First 10 paragraphs
+        }
+    except Exception as e:
+        st.error(f"Error scraping page with requests: {str(e)}")
+        return None
 
-# Show scraping method status
-if playwright_available:
-    st.success("✅ Playwright available - using advanced scraping")
-elif SELENIUM_AVAILABLE:
-    st.info("ℹ️ Using Selenium + requests fallback for dynamic content")
-else:
-    st.info("ℹ️ Using enhanced requests method for static content")
+def scrape_page_fallback(url: str):
+    """Smart fallback that tries Selenium first, then requests"""
+    # Try Selenium first for dynamic content
+    if SELENIUM_AVAILABLE:
+        st.info("Trying Selenium for dynamic content...")
+        result = scrape_page_selenium(url)
+        if result:
+            return result
+    
+    # Fallback to enhanced requests
+    st.info("Using enhanced requests method...")
+    return scrape_page_requests(url)
 
 def scrape_page_sync(url: str):
     """Synchronous version of scrape_page for Streamlit compatibility"""
@@ -88,6 +164,23 @@ def scrape_page_sync(url: str):
         st.warning(f"Playwright scraping failed: {str(e)}")
         st.info("Trying fallback method with requests...")
         return scrape_page_fallback(url)
+
+# Initialize session state
+if "page_data" not in st.session_state:
+    st.session_state.page_data = None
+if "page_summary" not in st.session_state:
+    st.session_state.page_summary = None
+
+# Simple check - don't try to launch browser during startup
+playwright_available = check_playwright_browsers()
+
+# Show scraping method status
+if playwright_available:
+    st.success("✅ Playwright available - using advanced scraping")
+elif SELENIUM_AVAILABLE:
+    st.info("ℹ️ Using Selenium + requests fallback for dynamic content")
+else:
+    st.info("ℹ️ Using enhanced requests method for static content")
 
 st.markdown("---")
 
@@ -184,136 +277,17 @@ if st.session_state.page_data:
             Please provide a detailed, helpful answer based on the scraped content.
             """
             
-            answer = ask_agent(prompt)
+        answer = ask_agent(prompt)
             st.subheader("🤖 AI Answer")
-            st.write(answer)
+        st.write(answer)
     
     # Clear session state button
     if st.button("🗑️ Clear Page Data"):
-        st.session_state.page_data = None
+    st.session_state.page_data = None
         st.session_state.page_summary = None
         st.rerun()
 
 else:
     st.info("👆 Please scrape a webpage first to start asking questions!")
 
-def scrape_page_selenium(url: str):
-    """Selenium-based scraping for dynamic content"""
-    if not SELENIUM_AVAILABLE:
-        return None
-    
-    try:
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--window-size=1920,1080")
-        
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        
-        driver.get(url)
-        
-        # Wait for content to load
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.TAG_NAME, "body"))
-        )
-        
-        # Get headings
-        heading_elements = driver.find_elements(By.CSS_SELECTOR, "h1, h2, h3, h4, h5, h6")
-        headings = [h.text.strip() for h in heading_elements if h.text.strip()]
-        
-        # Get links
-        link_elements = driver.find_elements(By.TAG_NAME, "a")
-        links = [link.get_attribute("href") for link in link_elements if link.get_attribute("href")]
-        
-        driver.quit()
-        
-        return {"url": url, "headings": headings, "links": links}
-    except Exception as e:
-        st.warning(f"Selenium scraping failed: {str(e)}")
-        return None
-
-def scrape_page_requests(url: str):
-    """Enhanced requests-based scraping with better headers and content extraction"""
-    try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-        }
-        
-        response = requests.get(url, headers=headers, timeout=15)
-        response.raise_for_status()
-        
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        # Remove script and style elements
-        for script in soup(["script", "style"]):
-            script.decompose()
-        
-        # Get headings
-        headings = [h.get_text().strip() for h in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])]
-        headings = [h for h in headings if h]  # Remove empty headings
-        
-        # Get links
-        links = [a.get('href') for a in soup.find_all('a', href=True)]
-        
-        # Get paragraph text for more content
-        paragraphs = [p.get_text().strip() for p in soup.find_all('p')]
-        paragraphs = [p for p in paragraphs if len(p) > 20]  # Only meaningful paragraphs
-        
-        return {
-            "url": url, 
-            "headings": headings, 
-            "links": links,
-            "paragraphs": paragraphs[:10]  # First 10 paragraphs
-        }
-    except Exception as e:
-        st.error(f"Error scraping page with requests: {str(e)}")
-        return None
-
-def scrape_page_fallback(url: str):
-    """Smart fallback that tries Selenium first, then requests"""
-    # Try Selenium first for dynamic content
-    if SELENIUM_AVAILABLE:
-        st.info("Trying Selenium for dynamic content...")
-        result = scrape_page_selenium(url)
-        if result:
-            return result
-    
-    # Fallback to enhanced requests
-    st.info("Using enhanced requests method...")
-    return scrape_page_requests(url)
-
-async def scrape_page(url: str):
-    """Scrape the page asynchronously using Playwright with fallback"""
-    if not playwright_available:
-        return scrape_page_fallback(url)
-    
-    try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
-            
-            # Set a reasonable timeout
-            page.set_default_timeout(30000)
-            
-            await page.goto(url, wait_until="domcontentloaded")
-            
-            # Get headings and links
-            headings = await page.eval_on_selector_all("h1, h2, h3, h4, h5, h6", "elements => elements.map(e => e.innerText)")
-            links = await page.eval_on_selector_all("a", "elements => elements.map(e => e.href)")
-            await browser.close()
-            
-            return {"url": url, "headings": headings, "links": links}
-    except Exception as e:
-        st.warning(f"Playwright scraping failed: {str(e)}")
-        st.info("Trying fallback method with requests...")
-        return scrape_page_fallback(url)
-
-# Removed old main function - everything is now integrated into the new UI above
+# Removed duplicate functions - all functions are now defined at the top of the file
