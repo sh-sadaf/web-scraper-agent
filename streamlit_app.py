@@ -52,6 +52,43 @@ elif SELENIUM_AVAILABLE:
 else:
     st.info("ℹ️ Using enhanced requests method for static content")
 
+def scrape_page_sync(url: str):
+    """Synchronous version of scrape_page for Streamlit compatibility"""
+    if not playwright_available:
+        return scrape_page_fallback(url)
+    
+    try:
+        # Try Playwright with sync API
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            
+            # Set a reasonable timeout
+            page.set_default_timeout(30000)
+            
+            page.goto(url, wait_until="domcontentloaded")
+            
+            # Get headings and links
+            headings = page.eval_on_selector_all("h1, h2, h3, h4, h5, h6", "elements => elements.map(e => e.innerText)")
+            links = page.eval_on_selector_all("a", "elements => elements.map(e => e.href)")
+            
+            # Get paragraph content for better AI analysis
+            paragraphs = page.eval_on_selector_all("p", "elements => elements.map(e => e.innerText).filter(text => text.length > 20)")
+            
+            browser.close()
+            
+            return {
+                "url": url, 
+                "headings": headings, 
+                "links": links,
+                "paragraphs": paragraphs[:10]  # First 10 paragraphs
+            }
+    except Exception as e:
+        st.warning(f"Playwright scraping failed: {str(e)}")
+        st.info("Trying fallback method with requests...")
+        return scrape_page_fallback(url)
+
 st.markdown("---")
 
 # Main URL input
@@ -253,64 +290,27 @@ def scrape_page_fallback(url: str):
     st.info("Using enhanced requests method...")
     return scrape_page_requests(url)
 
-def scrape_page_sync(url: str):
-    """Synchronous version of scrape_page for Streamlit compatibility"""
-    if not playwright_available:
-        return scrape_page_fallback(url)
-    
-    try:
-        # Try Playwright with sync API
-        from playwright.sync_api import sync_playwright
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            
-            # Set a reasonable timeout
-            page.set_default_timeout(30000)
-            
-            page.goto(url, wait_until="domcontentloaded")
-            
-            # Get headings and links
-            headings = page.eval_on_selector_all("h1, h2, h3, h4, h5, h6", "elements => elements.map(e => e.innerText)")
-            links = page.eval_on_selector_all("a", "elements => elements.map(e => e.href)")
-            
-            # Get paragraph content for better AI analysis
-            paragraphs = page.eval_on_selector_all("p", "elements => elements.map(e => e.innerText).filter(text => text.length > 20)")
-            
-            browser.close()
-            
-            return {
-                "url": url, 
-                "headings": headings, 
-                "links": links,
-                "paragraphs": paragraphs[:10]  # First 10 paragraphs
-            }
-    except Exception as e:
-        st.warning(f"Playwright scraping failed: {str(e)}")
-        st.info("Trying fallback method with requests...")
-        return scrape_page_fallback(url)
-
 async def scrape_page(url: str):
     """Scrape the page asynchronously using Playwright with fallback"""
     if not playwright_available:
         return scrape_page_fallback(url)
     
     try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
             
             # Set a reasonable timeout
             page.set_default_timeout(30000)
             
-            await page.goto(url, wait_until="domcontentloaded")
-            
-            # Get headings and links
-            headings = await page.eval_on_selector_all("h1, h2, h3, h4, h5, h6", "elements => elements.map(e => e.innerText)")
-            links = await page.eval_on_selector_all("a", "elements => elements.map(e => e.href)")
-            await browser.close()
-            
-            return {"url": url, "headings": headings, "links": links}
+        await page.goto(url, wait_until="domcontentloaded")
+        
+        # Get headings and links
+        headings = await page.eval_on_selector_all("h1, h2, h3, h4, h5, h6", "elements => elements.map(e => e.innerText)")
+        links = await page.eval_on_selector_all("a", "elements => elements.map(e => e.href)")
+        await browser.close()
+        
+        return {"url": url, "headings": headings, "links": links}
     except Exception as e:
         st.warning(f"Playwright scraping failed: {str(e)}")
         st.info("Trying fallback method with requests...")
