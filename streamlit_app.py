@@ -4,6 +4,8 @@ import asyncio
 import subprocess
 import sys
 import os
+import requests
+from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
 from agent import ask_agent  # your existing Gemini agent function
 
@@ -12,21 +14,14 @@ st.title("Web Scraper + AI Chat")
 def install_playwright_browsers():
     """Install Playwright browsers if not already installed"""
     try:
-        # For Streamlit Cloud, use the system playwright
+        # Try python module first (more reliable on Streamlit Cloud)
         result = subprocess.run([
-            "playwright", "install", "chromium", "--with-deps"
-        ], capture_output=True, text=True, check=True)
+            sys.executable, "-m", "playwright", "install", "chromium"
+        ], capture_output=True, text=True, check=True, timeout=300)
         return True
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        try:
-            # Fallback to python module
-            result = subprocess.run([
-                sys.executable, "-m", "playwright", "install", "chromium", "--with-deps"
-            ], capture_output=True, text=True, check=True)
-            return True
-        except subprocess.CalledProcessError as e:
-            st.error(f"Failed to install Playwright browsers: {e}")
-            return False
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
+        st.warning(f"Playwright installation attempt failed: {str(e)}")
+        return False
 
 def check_playwright_browsers():
     """Check if Playwright browsers are installed"""
@@ -46,14 +41,22 @@ if "page_data" not in st.session_state:
     st.session_state.page_data = None
 
 # Check and install Playwright browsers if needed
-if not check_playwright_browsers():
-    with st.spinner("Installing Playwright browsers... This may take a few minutes on first run."):
+playwright_available = check_playwright_browsers()
+if not playwright_available:
+    st.info("Setting up Playwright browsers... This may take a few minutes on first run.")
+    with st.spinner("Installing Playwright browsers..."):
         if install_playwright_browsers():
             st.success("Playwright browsers installed successfully!")
             st.rerun()
         else:
-            st.error("Failed to install Playwright browsers. The app may not work properly.")
-            st.info("If this persists, try redeploying your app on Streamlit Cloud.")
+            st.warning("Playwright installation failed, but the app will work with fallback method.")
+            st.info("The app will use requests + BeautifulSoup for scraping instead of Playwright.")
+
+# Show scraping method status
+if playwright_available:
+    st.success("✅ Playwright available - using advanced scraping")
+else:
+    st.info("ℹ️ Using fallback scraping method (requests + BeautifulSoup)")
 
 # Input URL
 url = st.text_input("Webpage URL:")
@@ -61,8 +64,30 @@ url = st.text_input("Webpage URL:")
 # Input Question
 question = st.text_input("Your Question:")
 
+def scrape_page_fallback(url: str):
+    """Fallback scraping method using requests and BeautifulSoup"""
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Get headings
+        headings = [h.get_text().strip() for h in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])]
+        
+        # Get links
+        links = [a.get('href') for a in soup.find_all('a', href=True)]
+        
+        return {"url": url, "headings": headings, "links": links}
+    except Exception as e:
+        st.error(f"Error scraping page with fallback method: {str(e)}")
+        return None
+
 async def scrape_page(url: str):
-    """Scrape the page asynchronously using Playwright"""
+    """Scrape the page asynchronously using Playwright with fallback"""
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
@@ -80,8 +105,9 @@ async def scrape_page(url: str):
             
             return {"url": url, "headings": headings, "links": links}
     except Exception as e:
-        st.error(f"Error scraping page: {str(e)}")
-        return None
+        st.warning(f"Playwright scraping failed: {str(e)}")
+        st.info("Trying fallback method with requests...")
+        return scrape_page_fallback(url)
 
 async def main(url, question):
     if url:
