@@ -277,13 +277,13 @@ if st.session_state.page_data:
             Please provide a detailed, helpful answer based on the scraped content.
             """
             
-        answer = ask_agent(prompt)
+            answer = ask_agent(prompt)
             st.subheader("🤖 AI Answer")
-        st.write(answer)
+            st.write(answer)
     
     # Clear session state button
     if st.button("🗑️ Clear Page Data"):
-    st.session_state.page_data = None
+        st.session_state.page_data = None
         st.session_state.page_summary = None
         st.rerun()
 
