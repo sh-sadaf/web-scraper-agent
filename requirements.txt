@@ -5,6 +5,8 @@ python-dotenv
 google-generativeai
 streamlit
 playwright
+selenium
+webdriver-manager
 fastapi
 uvicorn[standard]
 
