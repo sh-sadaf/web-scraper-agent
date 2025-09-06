@@ -296,21 +296,21 @@ async def scrape_page(url: str):
         return scrape_page_fallback(url)
     
     try:
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
             
             # Set a reasonable timeout
             page.set_default_timeout(30000)
             
-        await page.goto(url, wait_until="domcontentloaded")
-        
-        # Get headings and links
-        headings = await page.eval_on_selector_all("h1, h2, h3, h4, h5, h6", "elements => elements.map(e => e.innerText)")
-        links = await page.eval_on_selector_all("a", "elements => elements.map(e => e.href)")
-        await browser.close()
-        
-        return {"url": url, "headings": headings, "links": links}
+            await page.goto(url, wait_until="domcontentloaded")
+            
+            # Get headings and links
+            headings = await page.eval_on_selector_all("h1, h2, h3, h4, h5, h6", "elements => elements.map(e => e.innerText)")
+            links = await page.eval_on_selector_all("a", "elements => elements.map(e => e.href)")
+            await browser.close()
+            
+            return {"url": url, "headings": headings, "links": links}
     except Exception as e:
         st.warning(f"Playwright scraping failed: {str(e)}")
         st.info("Trying fallback method with requests...")
