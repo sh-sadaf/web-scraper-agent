@@ -61,7 +61,7 @@ url = st.text_input("🔗 Enter Website URL:", placeholder="https://example.com"
 if st.button("🚀 Scrape & Analyze Page", type="primary"):
     if url:
         with st.spinner("Scraping page content..."):
-            page_data = asyncio.run(scrape_page(url))
+            page_data = scrape_page_sync(url)
             if page_data:
                 st.session_state.page_data = page_data
                 st.success("✅ Page scraped successfully!")
@@ -252,6 +252,43 @@ def scrape_page_fallback(url: str):
     # Fallback to enhanced requests
     st.info("Using enhanced requests method...")
     return scrape_page_requests(url)
+
+def scrape_page_sync(url: str):
+    """Synchronous version of scrape_page for Streamlit compatibility"""
+    if not playwright_available:
+        return scrape_page_fallback(url)
+    
+    try:
+        # Try Playwright with sync API
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            
+            # Set a reasonable timeout
+            page.set_default_timeout(30000)
+            
+            page.goto(url, wait_until="domcontentloaded")
+            
+            # Get headings and links
+            headings = page.eval_on_selector_all("h1, h2, h3, h4, h5, h6", "elements => elements.map(e => e.innerText)")
+            links = page.eval_on_selector_all("a", "elements => elements.map(e => e.href)")
+            
+            # Get paragraph content for better AI analysis
+            paragraphs = page.eval_on_selector_all("p", "elements => elements.map(e => e.innerText).filter(text => text.length > 20)")
+            
+            browser.close()
+            
+            return {
+                "url": url, 
+                "headings": headings, 
+                "links": links,
+                "paragraphs": paragraphs[:10]  # First 10 paragraphs
+            }
+    except Exception as e:
+        st.warning(f"Playwright scraping failed: {str(e)}")
+        st.info("Trying fallback method with requests...")
+        return scrape_page_fallback(url)
 
 async def scrape_page(url: str):
     """Scrape the page asynchronously using Playwright with fallback"""
