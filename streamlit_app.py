@@ -36,10 +36,12 @@ if st.button("🚀 Scrape Page") and url:
     with st.spinner("Scraping full page with ScraperAPI..."):
         try:
             SCRAPER_API_KEY = st.secrets["SCRAPER_API_KEY"]
+            if not url.startswith("http"):
+                url = "https://" + url
             params = {
                 "api_key": SCRAPER_API_KEY,
                 "url": url,
-                "render": "true"  # enable JS rendering
+                "render": "true"
             }
             response = requests.get("https://api.scraperapi.com/", params=params, timeout=60)
             response.raise_for_status()
@@ -77,21 +79,26 @@ if st.session_state.page_data:
         st.metric("Links Found", len(page_data["links"]))
         st.metric("Paragraphs", len(page_data["paragraphs"]))
 
-MAX_PARAGRAPHS = 10
+    # --- AI Question Section ---
+    st.subheader("🤖 Ask AI About This Page")
+    topic = st.text_input("🔎 Optional: Enter a topic to focus on (e.g., 'weather'):", "")
+    question = st.text_input("💬 Enter your question:", placeholder="What is this page about?")
+    get_answer_clicked = st.button("Get AI Answer")
 
-if topic:
-    filtered_paragraphs = [p for p in page_data["paragraphs"] if topic.lower() in p.lower()]
-else:
-    filtered_paragraphs = page_data["paragraphs"][:MAX_PARAGRAPHS]
+    if get_answer_clicked and question:
+        with st.spinner("AI analyzing relevant content..."):
+            MAX_PARAGRAPHS = 10
+            # Filter paragraphs based on topic
+            filtered_paragraphs = [p for p in page_data["paragraphs"] if topic.lower() in p.lower()] if topic else page_data["paragraphs"][:MAX_PARAGRAPHS]
+            # Fallback if topic filter empty
+            if not filtered_paragraphs:
+                filtered_paragraphs = page_data["paragraphs"][:MAX_PARAGRAPHS]
 
-if not filtered_paragraphs:
-    filtered_paragraphs = page_data["paragraphs"][:MAX_PARAGRAPHS]
+            content_text = "\n\n".join(page_data["headings"] + filtered_paragraphs)
+            if len(content_text) > 2000:
+                content_text = content_text[:2000] + "\n...[truncated]"
 
-content_text = "\n\n".join(page_data["headings"] + filtered_paragraphs)
-if len(content_text) > 2000:
-    content_text = content_text[:2000] + "\n...[truncated]"
-
-prompt = f"""
+            prompt = f"""
 You are a helpful AI assistant specialized in analyzing web pages.
 
 Webpage URL: {page_data['url']}
@@ -110,13 +117,16 @@ Instructions for AI:
 - Do not attempt to summarize unrelated sections.
 """
 
-try:
-    st.session_state.ai_answer = ask_agent(prompt)
-except Exception as e:
-    st.session_state.ai_answer = f"AI request failed: {e}"
+            try:
+                st.session_state.ai_answer = ask_agent(prompt)
+            except Exception as e:
+                st.session_state.ai_answer = f"AI request failed: {e}"
 
-# --- Download Scraped Data ---
-if st.session_state.page_data:
+    if st.session_state.ai_answer:
+        st.subheader("AI Answer")
+        st.write(st.session_state.ai_answer)
+
+    # --- Download Scraped Data ---
     st.subheader("💾 Download Scraped Data")
     save_format = st.radio("Choose format:", ["JSON", "CSV"])
     data = st.session_state.page_data
@@ -130,7 +140,6 @@ if st.session_state.page_data:
             mime="application/json"
         )
     else:
-        # Align lengths for DataFrame
         max_len = max(len(data["headings"]), len(data["paragraphs"]), len(data["links"]))
         df = pd.DataFrame({
             "headings": data["headings"] + [""]*(max_len - len(data["headings"])),
