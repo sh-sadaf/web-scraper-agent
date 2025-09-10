@@ -78,6 +78,37 @@ else:
                         "paragraphs": paragraphs
                     }
                     st.success("✅ Full page scraped successfully!")
+if st.session_state.page_data:
+    st.subheader("🔎 Optional: Extract Topic-Specific Content")
+    topic = st.text_input("Enter a topic to focus on (leave blank for full page):")
+    if topic:
+        if st.button(f"Extract Content About '{topic}'"):
+            with st.spinner(f"AI filtering paragraphs for topic '{topic}'..."):
+                all_paragraphs = st.session_state.page_data["paragraphs"]
+                content_text = "\n\n".join(all_paragraphs[:50])  # send first 50 paragraphs max
+                prompt = f"""
+You are an AI assistant specialized in analyzing webpages.
+
+Webpage content:
+{content_text}
+
+Task: Extract only the paragraphs that are relevant to the topic "{topic}". 
+Return the paragraphs in the same order as they appear.
+"""
+                try:
+                    filtered_paragraphs = ask_agent(prompt)
+                    # Update session state with filtered paragraphs
+                    st.session_state.filtered_paragraphs = filtered_paragraphs
+                    st.success(f"✅ Found relevant content for '{topic}'")
+                except Exception as e:
+                    st.error(f"AI request failed: {e}")
+
+    # Display filtered content if available
+    if "filtered_paragraphs" in st.session_state:
+        st.subheader(f"📄 AI-Filtered Content for Topic: '{topic}'")
+        for i, p in enumerate(st.session_state.filtered_paragraphs[:20], 1):
+            st.write(f"{i}. {p}")
+
 
                 except Exception as e:
                     st.error(f"Error scraping page: {e}")
