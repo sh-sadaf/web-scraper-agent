@@ -6,24 +6,9 @@ import pandas as pd
 from agent import ask_agent  # your Gemini AI function
 
 st.set_page_config(
-    page_title="🌐 Smart Web Scraper & AI Assistant",
+    page_title="🌐 Smart Web Scraper + AI Assistant",
     layout="wide"
 )
-
-# === Sidebar ===
-st.sidebar.title("Quick Actions")
-st.sidebar.info(
-    "This app scrapes webpage content, lets AI analyze it, and saves the data."
-)
-st.sidebar.markdown("---")
-st.sidebar.subheader("Other Streamlit Projects")
-st.sidebar.markdown("""
-- [Weather App](https://share.streamlit.io)  
-- [Stock Dashboard](https://share.streamlit.io)  
-- [Text Summarizer](https://share.streamlit.io)  
-*Explore other public apps on Streamlit!*
-""")
-st.sidebar.markdown("---")
 
 # === Session State ===
 if "page_data" not in st.session_state:
@@ -31,31 +16,48 @@ if "page_data" not in st.session_state:
 if "ai_answer" not in st.session_state:
     st.session_state.ai_answer = None
 
+# === Sidebar ===
+st.sidebar.title("Quick Actions")
+if st.sidebar.button("🚀 Scrape New Page"):
+    st.session_state.page_data = None
+    st.session_state.ai_answer = None
+if st.sidebar.button("🗑️ Clear Session"):
+    st.session_state.page_data = None
+    st.session_state.ai_answer = None
+    st.sidebar.success("Session cleared")
+
 # === Main App ===
-st.title("🌐 Smart Web Scraper & AI Assistant")
-st.markdown("Enter a URL to scrape, ask questions, and save the data.")
+st.title("🌐 Smart Web Scraper + AI Assistant")
+st.markdown("Enter a URL to scrape, ask AI questions, and save the data.")
 
 # --- URL Input ---
 url = st.text_input("🔗 Enter the website URL:")
 
+# --- Scrape Button ---
 if st.button("🚀 Scrape Page") and url:
-    with st.spinner("Scraping page..."):
+    with st.spinner("Scraping page with ScraperAPI..."):
         try:
-            headers = {'User-Agent': 'Mozilla/5.0'}
-            response = requests.get(url, headers=headers, timeout=15)
+            # --- ScraperAPI request ---
+            SCRAPER_API_KEY = st.secrets["SCRAPER_API_KEY"]
+            params = {
+                "api_key": SCRAPER_API_KEY,
+                "url": url,
+                "render": "true"  # enables JS rendering
+            }
+            response = requests.get("http://api.scraperapi.com", params=params, timeout=15)
             response.raise_for_status()
             soup = BeautifulSoup(response.content, "html.parser")
 
-            # Scrape content
-            headings = [h.get_text(strip=True) for h in soup.find_all(["h1","h2","h3","h4","h5","h6"])]
-            links = [a.get("href") for a in soup.find_all("a", href=True)]
-            paragraphs = [p.get_text(strip=True) for p in soup.find_all("p") if len(p.get_text(strip=True)) > 20]
+            # --- Extract content ---
+            headings = [h.get_text(strip=True) for h in soup.find_all(["h1","h2","h3","h4","h5","h6"])[:10]]
+            links = [a.get("href") for a in soup.find_all("a", href=True)[:20]]
+            paragraphs = [p.get_text(strip=True) for p in soup.find_all("p") if len(p.get_text(strip=True)) > 20][:10]
 
             st.session_state.page_data = {
                 "url": url,
                 "headings": headings,
                 "links": links,
-                "paragraphs": paragraphs[:10]
+                "paragraphs": paragraphs
             }
             st.success("✅ Page scraped successfully!")
 
@@ -66,7 +68,6 @@ if st.button("🚀 Scrape Page") and url:
 if st.session_state.page_data:
     page_data = st.session_state.page_data
     st.subheader("📄 Scraped Data Preview")
-    
     col1, col2 = st.columns(2)
     with col1:
         st.metric("Headings Found", len(page_data["headings"]))
@@ -85,8 +86,14 @@ if st.session_state.page_data:
     if st.button("Get AI Answer") and question:
         with st.spinner("AI analyzing..."):
             content_text = "\n\n".join(page_data["headings"] + page_data["paragraphs"])
+            # Limit prompt size for speed
+            if len(content_text) > 3000:
+                content_text = content_text[:3000] + "\n...[truncated]"
             prompt = f"Webpage content:\n{content_text}\n\nUser question: {question}"
-            st.session_state.ai_answer = ask_agent(prompt)
+            try:
+                st.session_state.ai_answer = ask_agent(prompt)
+            except Exception as e:
+                st.session_state.ai_answer = f"AI request failed: {e}"
         
     if st.session_state.ai_answer:
         st.subheader("AI Answer")
@@ -113,10 +120,3 @@ if st.session_state.page_data:
             filename = "scraped_page.csv"
             df.to_csv(filename, index=False)
             st.success(f"Data saved as {filename}")
-
-# --- Clear Data Button ---
-if st.session_state.page_data:
-    if st.button("🗑️ Clear Page Data"):
-        st.session_state.page_data = None
-        st.session_state.ai_answer = None
-        st.success("Session cleared.")
