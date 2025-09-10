@@ -30,18 +30,21 @@ st.set_page_config(page_title="🌐 Smart Web Scraper", layout="wide")
 # --- Session State ---
 if "page_data" not in st.session_state:
     st.session_state.page_data = None
+if "filtered_paragraphs" not in st.session_state:
+    st.session_state.filtered_paragraphs = None
 
-# --- Sidebar for API Keys ---
-st.sidebar.subheader("🔑 Enter Your API Keys")
+# --- Sidebar for API Key ---
+st.sidebar.subheader("🔑 Enter Your ScraperAPI Key")
 scraper_key = st.sidebar.text_input("ScraperAPI Key", type="password")
-gemini_key = st.sidebar.text_input("Gemini AI Key", type="password")  # kept for future if AI is re-enabled
 
 st.sidebar.markdown("---")
 st.sidebar.title("Quick Actions")
 if st.sidebar.button("🚀 Scrape New Page"):
     st.session_state.page_data = None
+    st.session_state.filtered_paragraphs = None
 if st.sidebar.button("🗑️ Clear Session"):
     st.session_state.page_data = None
+    st.session_state.filtered_paragraphs = None
     st.sidebar.success("Session cleared!")
 
 # --- Main App ---
@@ -51,10 +54,10 @@ st.markdown("Scrape a webpage or a specific topic, and download the data.")
 # --- Select Scraper Mode ---
 scraper_mode = st.radio("Select Scraper Mode:", ["Full Page", "Topic-Driven"])
 
-# --- Scraper Logic ---
 if not scraper_key:
     st.warning("⚠️ Please enter your ScraperAPI Key in the sidebar to use the scraper.")
 else:
+    # --- Full Page Scraper ---
     if scraper_mode == "Full Page":
         url = st.text_input("Enter website URL:")
         if st.button("Scrape Full Page") and url:
@@ -78,51 +81,19 @@ else:
                         "paragraphs": paragraphs
                     }
                     st.success("✅ Full page scraped successfully!")
-if st.session_state.page_data:
-    st.subheader("🔎 Optional: Extract Topic-Specific Content")
-    topic = st.text_input("Enter a topic to focus on (leave blank for full page):")
-    if topic:
-        if st.button(f"Extract Content About '{topic}'"):
-            with st.spinner(f"AI filtering paragraphs for topic '{topic}'..."):
-                all_paragraphs = st.session_state.page_data["paragraphs"]
-                content_text = "\n\n".join(all_paragraphs[:50])  # send first 50 paragraphs max
-                prompt = f"""
-You are an AI assistant specialized in analyzing webpages.
-
-Webpage content:
-{content_text}
-
-Task: Extract only the paragraphs that are relevant to the topic "{topic}". 
-Return the paragraphs in the same order as they appear.
-"""
-                try:
-                    filtered_paragraphs = ask_agent(prompt)
-                    # Update session state with filtered paragraphs
-                    st.session_state.filtered_paragraphs = filtered_paragraphs
-                    st.success(f"✅ Found relevant content for '{topic}'")
-                except Exception as e:
-                    st.error(f"AI request failed: {e}")
-
-    # Display filtered content if available
-    if "filtered_paragraphs" in st.session_state:
-        st.subheader(f"📄 AI-Filtered Content for Topic: '{topic}'")
-        for i, p in enumerate(st.session_state.filtered_paragraphs[:20], 1):
-            st.write(f"{i}. {p}")
-
-
                 except Exception as e:
                     st.error(f"Error scraping page: {e}")
 
+    # --- Topic-Driven Scraper ---
     elif scraper_mode == "Topic-Driven":
         url = st.text_input("Enter website URL:")
         topic = st.text_input("Enter topic/keyword to scrape:")
-
         if st.button("Scrape Topic") and url and topic:
             with st.spinner(f"Scraping page for topic '{topic}'..."):
                 try:
                     page_data = scrape_topic(url, topic, scraper_key)
                     st.session_state.page_data = page_data
-                    st.success(f"✅ Found {len(page_data['paragraphs'])} entries for '{topic}'")
+                    st.success(f"✅ Found {len(page_data.get('paragraphs', []))} entries for '{topic}'")
                 except Exception as e:
                     st.error(f"Error scraping page: {e}")
 
@@ -131,7 +102,7 @@ if st.session_state.page_data:
     page_data = st.session_state.page_data
     st.subheader("📄 Scraped Data Preview")
     col1, col2 = st.columns(2)
-    
+
     if scraper_mode == "Full Page":
         with col1:
             st.metric("Headings Found", len(page_data.get("headings", [])))
@@ -162,7 +133,7 @@ if st.session_state.page_data:
             mime="application/json"
         )
     else:
-        max_len = max(len(data.get("headings",[])), len(data.get("paragraphs",[])), len(data.get("links",[])))
+        max_len = max(len(data.get("headings", [])), len(data.get("paragraphs", [])), len(data.get("links", [])))
         df = pd.DataFrame({
             "headings": data.get("headings", []) + [""]*(max_len - len(data.get("headings", []))),
             "paragraphs": data.get("paragraphs", []) + [""]*(max_len - len(data.get("paragraphs", []))),
