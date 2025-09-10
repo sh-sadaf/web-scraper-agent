@@ -5,6 +5,26 @@ import json
 import pandas as pd
 from agent import ask_agent  # Your Gemini AI function
 
+# -----------------------------
+# Topic-driven scraping function
+# -----------------------------
+def scrape_topic(url: str, topic: str, api_key: str):
+    if not url.startswith("http"):
+        url = "https://" + url
+    params = {"api_key": api_key, "url": url, "render": "true"}
+    response = requests.get("https://api.scraperapi.com/", params=params, timeout=60)
+    response.raise_for_status()
+    soup = BeautifulSoup(response.content, "html.parser")
+    
+    # Get all relevant text
+    elements = soup.find_all(["p", "span", "li", "h1", "h2", "h3", "h4", "h5", "h6", "div"])
+    all_text = [el.get_text(strip=True) for el in elements if el.get_text(strip=True)]
+    
+    # Filter by topic (case-insensitive)
+    filtered_text = [t for t in all_text if topic.lower() in t.lower()]
+    
+    return {"url": url, "topic": topic, "paragraphs": filtered_text}
+
 # --- Page Config ---
 st.set_page_config(page_title="🌐 Smart Web Scraper + AI Assistant", layout="wide")
 
@@ -63,20 +83,13 @@ elif scraper_mode == "Topic-Driven":
         with st.spinner(f"Scraping page for topic '{topic}'..."):
             try:
                 SCRAPER_API_KEY = st.secrets["SCRAPER_API_KEY"]
-                if not url.startswith("http"):
-                    url = "https://" + url
-                params = {"api_key": SCRAPER_API_KEY, "url": url, "render": "true"}
-                response = requests.get("https://api.scraperapi.com/", params=params, timeout=60)
-                response.raise_for_status()
-                soup = BeautifulSoup(response.content, "html.parser")
-
-                filtered_paragraphs = [p.get_text(strip=True) for p in soup.find_all("p") if topic.lower() in p.get_text(strip=True).lower()]
-
-                st.session_state.page_data = {"url": url, "topic": topic, "paragraphs": filtered_paragraphs}
-                st.success(f"✅ Found {len(filtered_paragraphs)} entries for '{topic}'")
-
+                page_data = scrape_topic(url, topic, SCRAPER_API_KEY)
+                st.session_state.page_data = page_data
+                st.success(f"✅ Found {len(page_data['paragraphs'])} entries for '{topic}'")
             except Exception as e:
                 st.error(f"Error scraping page: {e}")
+
+    # Here you can also add display, AI question, and download buttons for topic-driven mode
 
 # --- Display Scraped Data Preview ---
 if st.session_state.page_data:
