@@ -41,7 +41,7 @@ if st.button("🚀 Scrape Page") and url:
                 "url": url,
                 "render": "true"  # enable JS rendering
             }
-            response = requests.get("https://api.scraperapi.com", params=params, timeout=30)
+            response = requests.get("https://api.scraperapi.com/", params=params, timeout=60)
             response.raise_for_status()
             soup = BeautifulSoup(response.content, "html.parser")
 
