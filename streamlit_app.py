@@ -28,73 +28,90 @@ if st.sidebar.button("🗑️ Clear Session"):
 st.title("🌐 Smart Web Scraper & AI Assistant")
 st.markdown("Scrape a webpage, ask AI specific questions, and download the data.")
 
-# --- URL Input ---
-url = st.text_input("🔗 Enter the website URL:")
+# --- Select Scraper Mode ---
+scraper_mode = st.radio("Select Scraper Mode:", ["Full Page", "Topic-Driven"])
 
-# --- Scrape Button ---
-if st.button("🚀 Scrape Page") and url:
-    with st.spinner("Scraping full page with ScraperAPI..."):
-        try:
-            SCRAPER_API_KEY = st.secrets["SCRAPER_API_KEY"]
-            if not url.startswith("http"):
-                url = "https://" + url
-            params = {
-                "api_key": SCRAPER_API_KEY,
-                "url": url,
-                "render": "true"
-            }
-            response = requests.get("https://api.scraperapi.com/", params=params, timeout=60)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.content, "html.parser")
+# --- Scraper Logic ---
+if scraper_mode == "Full Page":
+    url = st.text_input("Enter website URL:")
+    if st.button("Scrape Full Page") and url:
+        with st.spinner("Scraping full page with ScraperAPI..."):
+            try:
+                SCRAPER_API_KEY = st.secrets["SCRAPER_API_KEY"]
+                if not url.startswith("http"):
+                    url = "https://" + url
+                params = {"api_key": SCRAPER_API_KEY, "url": url, "render": "true"}
+                response = requests.get("https://api.scraperapi.com/", params=params, timeout=60)
+                response.raise_for_status()
+                soup = BeautifulSoup(response.content, "html.parser")
 
-            # Extract full page content
-            headings = [h.get_text(strip=True) for h in soup.find_all(
-                ["h1","h2","h3","h4","h5","h6"]
-            )]
-            links = [a.get("href") for a in soup.find_all("a", href=True)]
-            paragraphs = [p.get_text(strip=True) for p in soup.find_all("p") if len(p.get_text(strip=True)) > 20]
+                headings = [h.get_text(strip=True) for h in soup.find_all(["h1","h2","h3","h4","h5","h6"])]
+                links = [a.get("href") for a in soup.find_all("a", href=True)]
+                paragraphs = [p.get_text(strip=True) for p in soup.find_all("p") if len(p.get_text(strip=True)) > 20]
 
-            st.session_state.page_data = {
-                "url": url,
-                "headings": headings,
-                "links": links,
-                "paragraphs": paragraphs
-            }
-            st.success("✅ Full page scraped successfully!")
+                st.session_state.page_data = {"url": url, "headings": headings, "links": links, "paragraphs": paragraphs}
+                st.success("✅ Full page scraped successfully!")
 
-        except Exception as e:
-            st.error(f"Error scraping page: {e}")
+            except Exception as e:
+                st.error(f"Error scraping page: {e}")
+
+elif scraper_mode == "Topic-Driven":
+    url = st.text_input("Enter website URL:")
+    topic = st.text_input("Enter topic/keyword to scrape:")
+
+    if st.button("Scrape Topic") and url and topic:
+        with st.spinner(f"Scraping page for topic '{topic}'..."):
+            try:
+                SCRAPER_API_KEY = st.secrets["SCRAPER_API_KEY"]
+                if not url.startswith("http"):
+                    url = "https://" + url
+                params = {"api_key": SCRAPER_API_KEY, "url": url, "render": "true"}
+                response = requests.get("https://api.scraperapi.com/", params=params, timeout=60)
+                response.raise_for_status()
+                soup = BeautifulSoup(response.content, "html.parser")
+
+                filtered_paragraphs = [p.get_text(strip=True) for p in soup.find_all("p") if topic.lower() in p.get_text(strip=True).lower()]
+
+                st.session_state.page_data = {"url": url, "topic": topic, "paragraphs": filtered_paragraphs}
+                st.success(f"✅ Found {len(filtered_paragraphs)} entries for '{topic}'")
+
+            except Exception as e:
+                st.error(f"Error scraping page: {e}")
 
 # --- Display Scraped Data Preview ---
 if st.session_state.page_data:
     page_data = st.session_state.page_data
     st.subheader("📄 Scraped Data Preview")
     col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Headings Found", len(page_data["headings"]))
-        with st.expander("View Headings (first 10)"):
-            for i, h in enumerate(page_data["headings"][:10], 1):
-                st.write(f"{i}. {h}")
-    with col2:
-        st.metric("Links Found", len(page_data["links"]))
-        st.metric("Paragraphs", len(page_data["paragraphs"]))
+    if scraper_mode == "Full Page":
+        with col1:
+            st.metric("Headings Found", len(page_data["headings"]))
+            with st.expander("View Headings (first 10)"):
+                for i, h in enumerate(page_data["headings"][:10], 1):
+                    st.write(f"{i}. {h}")
+        with col2:
+            st.metric("Links Found", len(page_data["links"]))
+            st.metric("Paragraphs", len(page_data["paragraphs"]))
+    else:
+        st.write(f"Topic: {page_data.get('topic','')}")
+        st.metric("Paragraphs Found", len(page_data["paragraphs"]))
+        for i, p in enumerate(page_data["paragraphs"][:10],1):
+            st.write(f"{i}. {p}")
 
-    # --- AI Question Section ---
+# --- AI Question Section ---
+if st.session_state.page_data:
     st.subheader("🤖 Ask AI About This Page")
-    topic = st.text_input("🔎 Optional: Enter a topic to focus on (e.g., 'weather'):", "")
-    question = st.text_input("💬 Enter your question:", placeholder="What is this page about?")
+    question = st.text_input("💬 Enter your question:", placeholder="What do you want to know?")
     get_answer_clicked = st.button("Get AI Answer")
 
     if get_answer_clicked and question:
         with st.spinner("AI analyzing relevant content..."):
             MAX_PARAGRAPHS = 10
-            # Filter paragraphs based on topic
-            filtered_paragraphs = [p for p in page_data["paragraphs"] if topic.lower() in p.lower()] if topic else page_data["paragraphs"][:MAX_PARAGRAPHS]
-            # Fallback if topic filter empty
-            if not filtered_paragraphs:
+            if scraper_mode == "Topic-Driven":
                 filtered_paragraphs = page_data["paragraphs"][:MAX_PARAGRAPHS]
-
-            content_text = "\n\n".join(page_data["headings"] + filtered_paragraphs)
+            else:
+                filtered_paragraphs = page_data["paragraphs"][:MAX_PARAGRAPHS]
+            content_text = "\n\n".join(page_data.get("headings", []) + filtered_paragraphs)
             if len(content_text) > 2000:
                 content_text = content_text[:2000] + "\n...[truncated]"
 
@@ -102,7 +119,7 @@ if st.session_state.page_data:
 You are a helpful AI assistant specialized in analyzing web pages.
 
 Webpage URL: {page_data['url']}
-Topic Filter: {topic if topic else 'None'}
+Topic Filter: {page_data.get('topic','None')}
 
 Webpage content:
 {content_text}
@@ -116,17 +133,17 @@ Instructions for AI:
 - Focus only on topic if specified.
 - Do not attempt to summarize unrelated sections.
 """
-
             try:
                 st.session_state.ai_answer = ask_agent(prompt)
             except Exception as e:
                 st.session_state.ai_answer = f"AI request failed: {e}"
 
-    if st.session_state.ai_answer:
-        st.subheader("AI Answer")
-        st.write(st.session_state.ai_answer)
+if st.session_state.ai_answer:
+    st.subheader("AI Answer")
+    st.write(st.session_state.ai_answer)
 
-    # --- Download Scraped Data ---
+# --- Download Scraped Data ---
+if st.session_state.page_data:
     st.subheader("💾 Download Scraped Data")
     save_format = st.radio("Choose format:", ["JSON", "CSV"])
     data = st.session_state.page_data
@@ -140,11 +157,11 @@ Instructions for AI:
             mime="application/json"
         )
     else:
-        max_len = max(len(data["headings"]), len(data["paragraphs"]), len(data["links"]))
+        max_len = max(len(data.get("headings",[])), len(data["paragraphs"]), len(data.get("links",[])))
         df = pd.DataFrame({
-            "headings": data["headings"] + [""]*(max_len - len(data["headings"])),
+            "headings": data.get("headings", []) + [""]*(max_len - len(data.get("headings", []))),
             "paragraphs": data["paragraphs"] + [""]*(max_len - len(data["paragraphs"])),
-            "links": data["links"] + [""]*(max_len - len(data["links"]))
+            "links": data.get("links", []) + [""]*(max_len - len(data.get("links", [])))
         })
         csv_data = df.to_csv(index=False)
         st.download_button(
