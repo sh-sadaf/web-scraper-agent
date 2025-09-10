@@ -1,13 +1,9 @@
-beautifulsoup4
+streamlit
 requests
-markdownify
+beautifulsoup4
 python-dotenv
 google-generativeai
-streamlit
-playwright
-selenium
-webdriver-manager
-fastapi
-uvicorn[standard]
+markdownify
+
 
 
