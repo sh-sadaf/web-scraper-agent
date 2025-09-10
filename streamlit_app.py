@@ -77,33 +77,21 @@ if st.session_state.page_data:
         st.metric("Links Found", len(page_data["links"]))
         st.metric("Paragraphs", len(page_data["paragraphs"]))
 
-# --- AI Question Section ---
-if st.session_state.page_data:
-    page_data = st.session_state.page_data
-    st.subheader("🤖 Ask AI About This Page")
-    topic = st.text_input("🔎 Optional: Enter a topic to focus on (e.g., 'weather'):", "")
-    question = st.text_input("💬 Enter your question:", placeholder="What is this page about?")
+MAX_PARAGRAPHS = 10
 
-    if st.button("Get AI Answer") and question:
-        with st.spinner("AI analyzing relevant content..."):
-            # Filter paragraphs based on topic
-            if topic:
-                filtered_paragraphs = [p for p in page_data["paragraphs"] if topic.lower() in p.lower()]
-            else:
-                filtered_paragraphs = page_data["paragraphs"][:10]  # default first 10 paragraphs
+if topic:
+    filtered_paragraphs = [p for p in page_data["paragraphs"] if topic.lower() in p.lower()]
+else:
+    filtered_paragraphs = page_data["paragraphs"][:MAX_PARAGRAPHS]
 
-            # Fallback if no relevant content
-            if not filtered_paragraphs:
-                filtered_paragraphs = page_data["paragraphs"][:10]
+if not filtered_paragraphs:
+    filtered_paragraphs = page_data["paragraphs"][:MAX_PARAGRAPHS]
 
-            content_text = "\n\n".join(page_data["headings"] + filtered_paragraphs)
+content_text = "\n\n".join(page_data["headings"] + filtered_paragraphs)
+if len(content_text) > 2000:
+    content_text = content_text[:2000] + "\n...[truncated]"
 
-            # Limit prompt size for speed
-            if len(content_text) > 3000:
-                content_text = content_text[:3000] + "\n...[truncated]"
-
-            # --- Improved AI Prompt ---
-            prompt = f"""
+prompt = f"""
 You are a helpful AI assistant specialized in analyzing web pages.
 
 Webpage URL: {page_data['url']}
@@ -115,24 +103,17 @@ Webpage content:
 User's question: {question}
 
 Instructions for AI:
-- Answer clearly and concisely based only on the content provided.
-- If the content does not contain information related to the user's question, respond politely:
+- Answer concisely and only using the content provided.
+- If content does not contain information on the question, respond politely:
   "No information about this topic was found on the page."
-- Focus on the topic if specified.
-- Keep the answer short but informative.
-- Do not guess beyond the provided content.
-
-Please provide the answer now.
+- Focus only on topic if specified.
+- Do not attempt to summarize unrelated sections.
 """
 
-            try:
-                st.session_state.ai_answer = ask_agent(prompt)
-            except Exception as e:
-                st.session_state.ai_answer = f"AI request failed: {e}"
-
-    if st.session_state.ai_answer:
-        st.subheader("AI Answer")
-        st.write(st.session_state.ai_answer)
+try:
+    st.session_state.ai_answer = ask_agent(prompt)
+except Exception as e:
+    st.session_state.ai_answer = f"AI request failed: {e}"
 
 # --- Download Scraped Data ---
 if st.session_state.page_data:
