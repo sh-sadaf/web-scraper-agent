@@ -135,7 +135,7 @@ elif tab == "AI Filtering":
                     content_text = "\n\n".join(paragraphs[:50])
 
                     # Send to AI for filtering
-prompt = f"""
+                    prompt = f"""
 You are an AI assistant specialized in analyzing webpages.
 
 Webpage content:
@@ -144,11 +144,11 @@ Webpage content:
 Task: Extract only the paragraphs that are relevant to the topic "{topic}".
 Return the paragraphs in the same order as they appear.
 """
-# Corrected call without api_key argument
-filtered_paragraphs = ask_agent(prompt)
-st.session_state.filtered_paragraphs = filtered_paragraphs
-st.session_state.page_data = {"url": url, "paragraphs": filtered_paragraphs, "topic": topic}
-st.success(f"✅ Found relevant content for '{topic}' using AI")
+                    # Correct call to ask_agent (without api_key argument)
+                    filtered_paragraphs = ask_agent(prompt)
+                    st.session_state.filtered_paragraphs = filtered_paragraphs
+                    st.session_state.page_data = {"url": url, "paragraphs": filtered_paragraphs, "topic": topic}
+                    st.success(f"✅ Found relevant content for '{topic}' using AI")
 
                 except Exception as e:
                     st.error(f"Error scraping or AI filtering page: {e}")
